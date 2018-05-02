@@ -9,6 +9,7 @@ from scipy import sparse
 
 from getParam import getParam
 from getDemand import getDemand
+import pickle
 
 ### SETTING UP the DATA PATH and Directories
 curdir = os.getcwd()
@@ -23,7 +24,7 @@ class Origin_Based_TAP:
         self.Param, self.Links, self.LinkNum, self.NodeSet, self.From, self.To = getParam(data_path)
         self.od_pair_demand, self.od_pair_list, self.Origin_set, self.Destination_set, self.qrs = getDemand(od_pair_data)
         self.bc =self.Param['B']/self.Param['Capacity (veh/h)']**4 
-
+        
     def create_model(self):
         self.model = ConcreteModel()
         self.model.nodes   = Set(initialize=self.NodeSet)
@@ -31,7 +32,7 @@ class Origin_Based_TAP:
         self.model.origins = Set(initialize=self.Origin_set)
         self.model.destinations = Set(initialize=self.Destination_set)
         self.model.x       = Var(self.model.arcs*self.model.origins, within=NonNegativeReals)
-        
+#        print(self.model.x)
     def create_obj(self):
         def obj_rule(model):
             first_term  = sum(self.Param['Free Flow Time (min)'][e]*(sum(self.model.x[e,o] for o in self.model.origins)) for e in self.model.arcs)
@@ -47,9 +48,13 @@ class Origin_Based_TAP:
                     pred.append(arc[0])
                 if arc[0] == n:
                     succ.append(arc[1])
-            return sum(self.model.x[n,p,o] for p in succ)-sum(self.model.x[s,n,o] for s in pred) == self.qrs[o-1,n-1]   
+                if n in self.model.origins:
+                    q_rs = self.qrs[o-1,n-1] 
+                else:
+                    q_rs= 0
+            return sum(self.model.x[n,p,o] for p in succ)-sum(self.model.x[s,n,o] for s in pred) == q_rs  
         self.model.flowbal = Constraint(self.model.nodes,self.model.origins, rule=flow_balance_rule)
-#        self.model.flowbal.pprint()
+        self.model.flowbal.pprint()
      
     def con(self):
         def ocon(model,n,p,s,o):
@@ -67,18 +72,24 @@ class Origin_Based_TAP:
         print(results)
         test_flow = {}  
         link_flow = {}
+        tstt = 0
         for e in self.model.arcs:
             link_flow[e] = 0
             for o in self.model.origins:
                 test_flow[e,o] = self.model.x[e,o].value 
+                print(e,o,test_flow[e,o])
                 link_flow[e]   =  link_flow[e] + self.model.x[e,o].value
         for e in self.model.arcs:        
-            first_term  = self.Param['Free Flow Time (min)'][e]*(link_flow[e]) 
-            second_term = self.Param['Free Flow Time (min)'][e]*self.bc[e]*(link_flow[e])**5/5
-            print(e,link_flow[e],first_term+second_term)
+            first_term  = self.Param['Free Flow Time (min)'][e] 
+            second_term = self.Param['Free Flow Time (min)'][e]*self.bc[e]*(link_flow[e])**4
+            tstt = tstt + first_term + second_term
+            print(e,link_flow[e],self.bc[e],first_term+second_term)
         self.test_flow = test_flow         
         self.link_flow = link_flow 
-        self.tstt = first_term + second_term
+        self.tstt = tstt
+        with open('flow.pickle', 'wb') as handle:
+            pickle.dump(test_flow, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         return test_flow 
 
 
@@ -93,6 +104,7 @@ a.create_model()
 
 a.create_obj()
 a.flow_con()
+a.con()
 b=a.solve()
 print(a.model.obj.expr(),a.tstt)
 print(a.link_flow)

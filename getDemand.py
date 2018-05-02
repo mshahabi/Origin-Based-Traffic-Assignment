@@ -27,7 +27,6 @@ def getDemand(filename):
               OD_pair = []
             #Check number of Origin
         elif "Origin" in line:
-                
               index_i=int(line.split("\t")[1])
               origin_set.update([int(index_i)])
             #Fills row for Origin index_i
@@ -50,5 +49,5 @@ def getDemand(filename):
     
     return D, OD_pair, origin_set, destination_set, qrs
 ####test 
-od_pair_data  = curdir + "\\Data\\SiouxFalls_OD.txt"
-od_pair_demand, od_pair_list, Origin_set, Destination_set, qrs = getDemand(od_pair_data)
+#od_pair_data  = curdir + "\\Data\\SiouxFalls_OD.txt"
+#od_pair_demand, od_pair_list, Origin_set, Destination_set, qrs = getDemand(od_pair_data)

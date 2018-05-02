@@ -19,6 +19,7 @@ from getParam import getParam
 from getDemand import getDemand
 
 import matplotlib.pyplot as plt
+import pickle 
 
 curdir = os.getcwd()
 data_path = curdir + "\\Data\\SiouxFalls_net.txt"
@@ -26,8 +27,8 @@ partition_network_path = curdir + "\\Data\\SFOutfile.csv"
 node_pos_path = curdir + "\\Data\\SiouxFalls_Nodes_Pos.txt"
 od_pair_data  = curdir + "\\Data\\SiouxFalls_OD.txt"
 
-clust_num = 2
-node_per_clust = 2
+clust_num = 4
+node_per_clust = 1
 
 netClustring= Partitions(data_path,clust_num,node_per_clust,node_pos_path)
 netClustring.solve()
@@ -41,7 +42,7 @@ class cluster_assignement(Origin_Based_TAP):
         
         total_clusters = [i for i in range(1,total_clusters+1)]         
         self.lkToClust,self.clustToLk,self.clustToBrknLk,self.clustToNd,self.clustOrgn,self.clustToBrknNd = netClustring.extract_partitions()
-        
+        print("Cluster Info", self.lkToClust,self.clustToLk,self.clustToBrknLk,self.clustToNd,self.clustOrgn,self.clustToBrknNd)
         self.NodeSet = self.clustToNd[cluster_number]
         self.Links   = self.clustToLk[cluster_number]
         self.Origin_clust = self.clustOrgn[cluster_number]
@@ -56,7 +57,8 @@ class cluster_assignement(Origin_Based_TAP):
         self.create_obj()
         self.flow_con()
         self.solve()
-#        print(self.qrs) 
+        
+#        print("hhhh",self.Broken_Nodes,self.clustToNd) 
         
     def create_model(self,x_iter,lambdaa_iter,etta):
         self.model = ConcreteModel()
@@ -72,20 +74,19 @@ class cluster_assignement(Origin_Based_TAP):
         self.model.x             = Var(self.model.arcs*self.model.origins, within=NonNegativeReals)
         self.model.x_brk         = Var(self.model.borkenLinks*self.model.origins*self.model.clusters, within=NonNegativeReals)
         self.model.etta          = Param(initialize=etta)
-#        print(self.model.origins.display())
-        
+  
     def create_obj(self):
         def obj_rule(model):
             cluster_free_flow  = sum(self.Param['Free Flow Time (min)'][e]*(sum(self.model.x[e,o] for o in self.model.origins)) for e in self.model.arcs)
             cluster_bpr        = sum(self.Param['Free Flow Time (min)'][e]*self.bc[e]*(sum(self.model.x[e,o] for o in self.model.origins))**5/5 for e in self.model.arcs)
             broken_free_flow   = sum(sum(self.Param['Free Flow Time (min)'][e]*(sum(self.model.x_brk[e,o,c] for o in self.model.origins)) for e in self.model.borkenLinks) for c in self.model.clusters if c==self.cluster_number)
             broken_bpr         = sum(sum(self.Param['Free Flow Time (min)'][e]*self.bc[e]*(sum(self.model.x_brk[e,o,c] for o in self.model.origins))**5/5 for e in self.model.borkenLinks) for c in self.model.clusters if c==self.cluster_number)
-            lagrange           = sum(sum(sum(self.lambdaa[e,o,c]*(self.model.x_brk[e,o,c]- self.x_bar[e,o]) for e in self.model.borkenLinks) for o in self.model.origins) for c in self.model.clusters if c==self.cluster_number)
+            lagrange           = sum(sum(sum(self.lambdaa[e,o,c]*(self.model.x_brk[e,o,c]- self.x_bar[e,o]) for e in self.model.borkenLinks if e[0] == o) for o in self.model.origins) for c in self.model.clusters if c==self.cluster_number)
             augmented          = sum(sum(sum(self.model.etta*(self.model.x_brk[e,o,c]- self.x_bar[e,o])**2 for e in self.model.borkenLinks) for o in self.model.origins)for c in self.model.clusters if c==self.cluster_number)
             return cluster_free_flow + cluster_bpr + broken_free_flow + broken_bpr + lagrange + augmented 
         self.model.obj     = Objective(rule=obj_rule,sense=minimize) 
-#        self.model.pprint()
-       
+#        self.model.obj.pprint()
+#       
         
     def flow_con(self):
         def flow_balance_rule(model,n,o):
@@ -98,29 +99,29 @@ class cluster_assignement(Origin_Based_TAP):
                         succ.append(arc[1])
                 return sum(self.model.x[n,p,o] for p in succ) - sum(self.model.x[s,n,o] for s in pred) == self.qrs[o-1,n-1]        
             if n in self.model.borkenNodes:
-                for arc in self.model.arcs:
+                 for arc in self.model.arcs:
                     if arc[1] == n:
                         pred.append(arc[0])
                     if arc[0] == n:
                         succ.append(arc[1])
-                for arc_brk in self.model.borkenLinks :
+                 for arc_brk in self.model.borkenLinks :
                     if arc_brk[1] == n:
                         pred_brk.append(arc_brk[0])
                       
                     if arc_brk[0] == n:
                         succ_brk.append(arc_brk[1])
-                         
-                return sum(self.model.x[n,p,o] for p in succ) + sum(sum(self.model.x_brk[n,p,o,c] for p in succ_brk)for c in self.model.clusters if c==self.cluster_number)-sum(self.model.x[s,n,o] for s in pred)-sum(sum(self.model.x_brk[s,n,o,c] for s in pred_brk)for c in self.model.clusters if c==self.cluster_number) == self.qrs[o-1,n-1]    
+#                print("aaa",succ_brk,pred_brk)         
+                 return sum(self.model.x[n,p,o] for p in succ) + sum(sum(self.model.x_brk[n,p,o,c] for p in succ_brk)for c in self.model.clusters if c==self.cluster_number)-sum(self.model.x[s,n,o] for s in pred)-sum(sum(self.model.x_brk[s,n,o,c] for s in pred_brk)for c in self.model.clusters if c==self.cluster_number) == self.qrs[o-1,n-1]    
             
         self.model.flowbal = Constraint(self.model.nodes,self.model.origins, rule=flow_balance_rule)     
 #        self.model.flowbal.pprint()
 #        
     def solve(self):
         start_time = time.time()
-        opt = SolverFactory("baron")
-        opt.options["nlpgap"] = 0
+        opt = SolverFactory("IPOPT")
+#        opt.options["nlpgap"] = 0
         results = opt.solve(self.model)
-        print(results)
+#        print(results)
         print("solving each partition took --- %s seconds ---" % (time.time() - start_time))    
         x_bar = {}
         x_clust = {}
@@ -131,7 +132,7 @@ class cluster_assignement(Origin_Based_TAP):
                 for c in self.model.clusters:
                     if c==self.cluster_number:
                         x_bar[e,o,c]=self.model.x_brk[e,o,c].value
-#                        print("x_bar",e,o,c,x_bar[e,o,c])     
+                        print("x_bar",e,o,c,x_bar[e,o,c])     
                         test_flow_1[e] = self.model.x_brk[e,o,c].value + test_flow_1[e]      
         for e in  self.model.arcs:
             for o in self.model.origins: 
@@ -194,25 +195,35 @@ class Pricing:
         self.model.x_p           = Var(self.model.arcs*self.model.origins, within=NonNegativeReals)
   
     def create_obj(self):
-        def obj_rule(model):           
-            lagrange      =      sum(sum(sum(self.lambdaa_bar[e,o,c]*(self.x_brk_bar[e,o,c]-self.model.x_p[e,o]) for e in self.ClustToBrknLnks[c]) for o in self.model.origins) for c in self.total_clusters) 
-            augmented_lagrange  = sum(sum(sum(self.etta_bar*(self.x_brk_bar[e,o,c]-self.model.x_p[e,o])**2 for e in self.ClustToBrknLnks[c]) for o in self.model.origins) for c in self.total_clusters)
-            return  lagrange+augmented_lagrange
+        lagrange = {}
+        augmented_lagrange = {}
+        for c in self.total_clusters: lagrange[c] = 0;augmented_lagrange[c] = 0 
+        def obj_rule(model):            
+            for c in self.total_clusters: 
+                for e in self.ClustToBrknLnks[c]: 
+                    for o in self.model.origins:                     
+                        lagrange[c]      =  lagrange[c] + self.lambdaa_bar[e,o,c]*(self.x_brk_bar[e,o,c]-self.model.x_p[e,o])
+                        augmented_lagrange[c]  = augmented_lagrange[c] + self.etta_bar*(self.x_brk_bar[e,o,c]-self.model.x_p[e,o])**2
+
+            obj_value = sum(lagrange[c]+augmented_lagrange[c] for c in self.total_clusters)
+            return  obj_value   
         self.model.obj     = Objective(rule=obj_rule,sense=minimize) 
-#        self.model.pprint()
+#        self.model.obj.pprint()      
         
     def solve_pricing_problem(self):
         start_time = time.time()
         self.create_pricing_model()
         self.create_obj()
-        opt = SolverFactory("baron")
-        opt.options["nlpgap"] = 0
+        opt = SolverFactory("IPOPT")
+#        opt.options["nlpgap"] = 0
         print("solving prcing problem took --- %s seconds ---" % (time.time() - start_time)) 
         self.results = opt.solve(self.model)
         link_flow ={}
-        for e in self.model.arcs:
-            for o in self.model.origins:
-               link_flow[e,o]=self.model.x_p[e,o].value
+        for c in self.total_clusters:
+            for e in self.ClustToBrknLnks[c]:
+                for o in self.model.origins:
+                    link_flow[e,o]=self.model.x_p[e,o].value
+#                    print(e,o,link_flow[e,o])
         self.link_flow = link_flow
         self.primal_residule  = self.model.obj.expr()
         
@@ -228,13 +239,15 @@ class Pricing:
 
 lc,cL,cbl,cn,co,cbn = netClustring.extract_partitions()
 os = set()
+with open('flow.pickle', 'rb') as handle:
+    b = pickle.load(handle)
 for c in range(1,clust_num+1): os.update(co[c])
 la={}; x={}
 for c in range(1,clust_num+1):
       for ee in cbl[c]:
             for oo in os:
-                 la[ee,oo,c] = 1
-                 x[ee,oo] = 1000
+                 la[ee,oo,c] = 10
+                 x[ee,oo] = b[ee,oo]
 
 total_link_flow = {}
   
@@ -251,9 +264,9 @@ bc =param['B']/param['Capacity (veh/h)']**4
  
 tstt = []  
 xx = []   
-etta = 0.001   
+etta = 0.01   
 tstt_ = 10000000000
-for iteration in range(1,400):
+for iteration in range(1,5000):
     
 #    if iteration>1:
 #        etta = 0.00755
@@ -288,22 +301,26 @@ for iteration in range(1,400):
  
            
     fft = sum(param['Free Flow Time (min)'][ee]*total_link_flow[ee] for ee in L)
-    bpr = sum(param['Free Flow Time (min)'][ee]*bc[ee]*(total_link_flow[ee])**5/5 for ee in L)
+    bpr = sum(param['Free Flow Time (min)'][ee]*bc[ee]*(total_link_flow[ee])**5 for ee in L)
     tstt.append(fft+bpr)
     xx.append(iteration)
     plt.scatter(xx,tstt)
     plt.show()
     print("Total System Travel Time is ", fft+ bpr)
-    if tstt_ < fft+ bpr:
-        etta = 0.02
-    else:
-        etta = 0.02
+    if iteration < 50:
+        etta = 0.05
+    elif iteration > 50 and  iteration < 100:
+        etta = 0.05
+    elif iteration >= 100 and  iteration < 2000:    
+        etta = 0.05
+    else:    
+        etta = 0.05
     tstt_ =  fft+ bpr 
 fft = sum(param['Free Flow Time (min)'][ee]*total_link_flow[ee] for ee in L)
-bpr = sum(param['Free Flow Time (min)'][ee]*bc[ee]*(total_link_flow[ee])**5/5 for ee in L)    
+bpr = sum(param['Free Flow Time (min)'][ee]*bc[ee]*(total_link_flow[ee])**5 for ee in L)    
 print(fft+bpr)
 for ee in L:
- print(ee,total_link_flow[ee],param['Free Flow Time (min)'][ee]*total_link_flow[ee]+param['Free Flow Time (min)'][ee]*bc[ee]*(total_link_flow[ee])**5/5)    
+ print(ee,bc[ee], total_link_flow[ee],param['Free Flow Time (min)'][ee]*total_link_flow[ee]+param['Free Flow Time (min)'][ee]*bc[ee]*(total_link_flow[ee])**5)    
 #a1.origin_set_pricing
 #a1.x_brk_bar[(5,9),1,1]
 #a1.lambdaa_bar[5,9,1,1]

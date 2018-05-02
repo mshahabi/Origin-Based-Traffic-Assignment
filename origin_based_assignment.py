@@ -4,7 +4,7 @@ import os
 from pyomo.environ import *
 from pyomo.opt import SolverFactory
 from pyomo.opt import SolverStatus, TerminationCondition
-
+      
 from scipy import sparse
 
 from getParam import getParam
@@ -46,7 +46,11 @@ class OriginBasedTAP():
                     pred.append(arc[0])
                 if arc[0] == n:
                     succ.append(arc[1])
-            return sum(self.model.x[n,p,o] for p in pred)-sum(self.model.x[s,n,o] for s in succ) == self.qrs[o-1,n-1]    
+                if n in self.model.origins:
+                    q_rs = self.qrs[o-1,n-1] 
+                else:
+                    q_rs= 0
+            return sum(self.model.x[n,p,o] for p in succ)-sum(self.model.x[s,n,o] for s in pred) == q_rs   
                 
         self.model.flowbal = Constraint(self.model.nodes,self.model.origins, rule=flow_balance_rule)
             
@@ -60,17 +64,17 @@ class OriginBasedTAP():
         self.model.ocon= Constraint(self.model.nodes,self.model.arcs,self.model.origins, rule=ocon)
         
     def solve(self):
-        instance = self.model.create_instance()
-        opt = SolverFactory("baron")
-        results = opt.solve(instance)
+        
+        opt = SolverFactory("IPOPT")
+        results = opt.solve(self.model)
         test_flow = 0
         for o in self.model.origins:
-            test_flow = instance.x[1,2,o].value + test_flow
+            test_flow = self.model.x[1,117,o].value + test_flow
             
         return test_flow    
 
 
             
 ###TEST CODE###        
-#a=Origin_Based_TAP(data_path,od_pair_data)
-#b=a.solve()
+a=OriginBasedTAP(data_path,od_pair_data)
+b=a.solve()

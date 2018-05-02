@@ -55,7 +55,7 @@ class Partitions:
         self.model.cardinality = Constraint(self.model.num_cluster, rule=cardinality_rule)
         
     def solve(self):
-        opt = SolverFactory("baron")
+        opt = SolverFactory("ipopt")
         self.results = opt.solve(self.model)
         return self.results 
     
@@ -83,10 +83,12 @@ class Partitions:
                        ClusterOrigins[k].update([p])
                elif self.model.x[p,k].value==1 and self.model.x[s,k].value==0:                 
                    ClusterToBrokenLinks[k].append((p,s))
+                   ClusterToNode[k].update([p])
                    if p in self.Origin_set:
                        ClusterOrigins[k].update([p])
                    ClusterToBrokenNodes[k].update([p])
                elif self.model.x[p,k].value==0 and self.model.x[s,k].value==1:
+                   ClusterToNode[k].update([s])
                    ClusterToBrokenLinks[k].append((p,s))  
                    ClusterToBrokenNodes[k].update([s])
                    
@@ -130,8 +132,8 @@ class Partitions:
 
 #
 #
-#netClustring= Partitions(data_path,2,12,node_pos_path)
-#clusters = netClustring.solve()
+netClustring= Partitions(data_path,3,80,node_pos_path)
+clusters = netClustring.solve()
 #netClustring.draw_partitions() 
 #netClustring.draw_original_graph()  
 ##a=Partitions(data_path,2,3,node_pos_path)                
