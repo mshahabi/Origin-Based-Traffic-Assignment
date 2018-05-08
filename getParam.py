@@ -41,4 +41,11 @@ def getParam(filename):
     Param.index =   LinkList 
     NumberofLinks = Param.shape[0]
     return Param, LinkList, NumberofLinks, NumberOfNodes_Tail, From, To
+### SETTING UP the DATA PATH and Directories
+curdir = os.getcwd()
+data_path = curdir + "\\Data\\SiouxFalls_net.txt"
+partition_network_path = curdir + "\\Data\\SFOutfile.csv"
+node_pos_path = curdir + "\\Data\\SiouxFalls_Nodes_Pos.txt"
+od_pair_data  = curdir + "\\Data\\SiouxFalls_OD.txt"
     
+Param, Links, LinkNum, NodeSet,From, To = getParam(data_path)

@@ -48,6 +48,6 @@ def getDemand(filename):
                 qrs[o-1,d-1] = -D[o-1,d-1]
     
     return D, OD_pair, origin_set, destination_set, qrs
-####test 
-#od_pair_data  = curdir + "\\Data\\SiouxFalls_OD.txt"
-#od_pair_demand, od_pair_list, Origin_set, Destination_set, qrs = getDemand(od_pair_data)
+###test 
+od_pair_data  = curdir + "\\Data\\SiouxFalls_OD.txt"
+od_pair_demand, od_pair_list, Origin_set, Destination_set, qrs = getDemand(od_pair_data)
